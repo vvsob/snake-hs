@@ -1,19 +1,32 @@
 module Graphics (
-    renderFrame
+    renderFrame,
+    tileSize
 ) where
 
 import SDL
-import SnakeLib
+import qualified SDL.Font as FONT
 import Foreign.C (CInt)
 import Data.Array (assocs)
 import Control.Monad (void)
 
-renderFrame :: Renderer -> Texture -> Game -> IO ()
-renderFrame renderer texture game = do
+import Snake
+
+import Assets
+import qualified Data.Text as Text
+
+spriteSize :: CInt
+spriteSize = 16
+
+tileSize :: CInt
+tileSize = 64
+
+renderFrame :: Renderer -> Assets -> Game -> IO ()
+renderFrame renderer (texture, font) game = do
     rendererDrawColor renderer $= V4 32 32 32 255
     clear renderer
     rendererDrawColor renderer $= V4 255 255 255 255
     renderGame renderer texture game
+    renderScore renderer font game
     present renderer
 
 renderGame :: Renderer -> Texture -> Game -> IO ()
@@ -25,6 +38,19 @@ renderTile renderer texture (pos, tile) = case tile of
     Empty -> return ()
     Apple -> renderSpriteAt renderer texture APPLE pos
     SnakeSegment orientation -> renderSpriteAt renderer texture (snakeSprite orientation) pos
+
+renderScore :: Renderer -> FONT.Font -> Game -> IO ()
+renderScore renderer font game = do
+    let score = snakeSegmentCount game
+    surface <- FONT.blended font (V4 255 255 255 255) $ Text.pack ("Score: " ++ show score)
+    texture <- createTextureFromSurface renderer surface
+    freeSurface surface
+
+    width <- textureWidth <$> queryTexture texture
+    height <- textureHeight <$> queryTexture texture
+    copy renderer texture Nothing (Just (Rectangle (P (V2 20 20)) (V2 width height)))
+
+    destroyTexture texture
 
 snakeSprite :: SnakeSegmentOrientation -> Sprite
 snakeSprite HEAD_DOWN = SNAKE_HEAD_DOWN
@@ -45,11 +71,11 @@ snakeSprite TAIL_LEFT = SNAKE_TAIL_LEFT
 renderSpriteAt :: Renderer -> Texture -> Sprite -> (Int, Int) -> IO ()
 renderSpriteAt renderer texture sprite (x, y) = do
     let srcRect = getSpriteSheetLocation $ getSpriteIndex sprite
-    let dstRect = Rectangle (P (V2 (64 * (fromIntegral x)) (64 * (fromIntegral y)))) (V2 64 64)
+    let dstRect = Rectangle (P (V2 (tileSize * (fromIntegral x)) (tileSize * (fromIntegral y)))) (V2 tileSize tileSize)
     copy renderer texture (Just srcRect) (Just dstRect)
 
 getSpriteSheetLocation :: (Int, Int) -> Rectangle CInt
-getSpriteSheetLocation (y, x) = Rectangle (P (V2 (16 * (fromIntegral x)) (16 * (fromIntegral y)))) (V2 16 16)
+getSpriteSheetLocation (y, x) = Rectangle (P (V2 (spriteSize * (fromIntegral x)) (spriteSize * (fromIntegral y)))) (V2 spriteSize spriteSize)
 
 getSpriteIndex :: Sprite -> (Int, Int)
 getSpriteIndex SNAKE_HEAD_DOWN = (0, 0)

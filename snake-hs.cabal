@@ -58,7 +58,9 @@ library
     import:           warnings
 
     -- Modules exported by the library.
-    exposed-modules:  SnakeLib
+    exposed-modules:
+        Snake
+        Tile
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -88,6 +90,7 @@ executable snake-hs
 
     -- Modules included in this executable, other than Main.
     other-modules:
+        Assets
         Graphics
 
     -- LANGUAGE extensions used by modules in this package.
@@ -100,7 +103,8 @@ executable snake-hs
         text,
         array,
         sdl2,
-        sdl2-image
+        sdl2-image,
+        sdl2-ttf
 
     -- Directories containing source files.
     hs-source-dirs:   app

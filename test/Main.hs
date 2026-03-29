@@ -1,7 +1,7 @@
 module Main (main) where
 
-import Data.Array (elems, (!))
-import SnakeLib
+import Data.Array ((!))
+import Snake
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.HUnit (assertEqual, testCase)
 
@@ -125,9 +125,3 @@ runTickTests =
                 assertEqual "tail advanced" (1, 0) (snakeTail step4)
     ]
 
-snakeSegmentCount :: Game -> Int
-snakeSegmentCount = length . filter isSnakeSegment . elems . gameBoard
-
-isSnakeSegment :: Tile -> Bool
-isSnakeSegment (SnakeSegment _) = True
-isSnakeSegment _ = False
