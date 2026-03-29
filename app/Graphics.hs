@@ -5,45 +5,42 @@ module Graphics (
 import SDL
 import SnakeLib
 import Foreign.C (CInt)
-import Data.Array (indices)
+import Data.Array (assocs)
 import Control.Monad (void)
 
-renderFrame :: Renderer -> Texture -> IO ()
-renderFrame renderer texture = do
+renderFrame :: Renderer -> Texture -> Game -> IO ()
+renderFrame renderer texture game = do
     rendererDrawColor renderer $= V4 32 32 32 255
     clear renderer
     rendererDrawColor renderer $= V4 255 255 255 255
-    renderState renderer texture $ initialState (20, 20) (2, 2)
+    renderGame renderer texture game
     present renderer
 
-renderState :: Renderer -> Texture -> GameState -> IO ()
-renderState renderer texture state = do
-    void $ traverse (renderTile renderer texture state) (indices $ gameBoard state)
+renderGame :: Renderer -> Texture -> Game -> IO ()
+renderGame renderer texture state = do
+    void $ traverse (renderTile renderer texture) (assocs $ gameBoard state)
 
-renderTile :: Renderer -> Texture -> GameState -> Pos -> IO ()
-renderTile renderer texture state pos = case tileAt (gameBoard state) pos of
+renderTile :: Renderer -> Texture -> (Pos, Tile) -> IO ()
+renderTile renderer texture (pos, tile) = case tile of
     Empty -> return ()
     Apple -> renderSpriteAt renderer texture APPLE pos
-    Snake -> 
-        let size = gameBoardSize state
-        in renderSpriteAt renderer texture (snakeSprite (neighborTiles size (gameBoard state) pos) (pos == snakeHead state))pos
+    Snake orientation -> renderSpriteAt renderer texture (snakeSprite orientation) pos
 
-snakeSprite :: (Tile, Tile, Tile, Tile) -> Bool -> Sprite
-snakeSprite (Snake, _, _, _) True = SNAKE_HEAD_DOWN
-snakeSprite (_, Snake, _, _) True = SNAKE_HEAD_LEFT
-snakeSprite (_, _, Snake, _) True = SNAKE_HEAD_UP
-snakeSprite (_, _, _, Snake) True = SNAKE_HEAD_RIGHT
-snakeSprite (Snake, _, Snake, _) _ = SNAKE_VERTICAL
-snakeSprite (_, Snake, _, Snake) _ = SNAKE_HORIZONTAL
-snakeSprite (Snake, Snake, _, _) _ = SNAKE_TURN_UP_RIGHT
-snakeSprite (_, Snake, Snake, _) _ = SNAKE_TURN_DOWN_RIGHT
-snakeSprite (_, _, Snake, Snake) _ = SNAKE_TURN_DOWN_LEFT
-snakeSprite (Snake, _, _, Snake) _ = SNAKE_TURN_UP_LEFT
-snakeSprite (Snake, _, _, _) _ = SNAKE_TAIL_UP
-snakeSprite (_, Snake, _, _) _ = SNAKE_TAIL_RIGHT
-snakeSprite (_, _, Snake, _) _ = SNAKE_TAIL_DOWN
-snakeSprite (_, _, _, Snake) _ = SNAKE_TAIL_LEFT
-snakeSprite _ _ = APPLE
+snakeSprite :: SnakeOrientation -> Sprite
+snakeSprite HEAD_DOWN = SNAKE_HEAD_DOWN
+snakeSprite HEAD_LEFT = SNAKE_HEAD_LEFT
+snakeSprite HEAD_UP = SNAKE_HEAD_UP
+snakeSprite HEAD_RIGHT = SNAKE_HEAD_RIGHT
+snakeSprite VERTICAL = SNAKE_VERTICAL
+snakeSprite HORIZONTAL = SNAKE_HORIZONTAL
+snakeSprite TURN_UP_RIGHT = SNAKE_TURN_UP_RIGHT
+snakeSprite TURN_DOWN_RIGHT = SNAKE_TURN_DOWN_RIGHT
+snakeSprite TURN_DOWN_LEFT = SNAKE_TURN_DOWN_LEFT
+snakeSprite TURN_UP_LEFT = SNAKE_TURN_UP_LEFT
+snakeSprite TAIL_UP = SNAKE_TAIL_UP
+snakeSprite TAIL_RIGHT = SNAKE_TAIL_RIGHT
+snakeSprite TAIL_DOWN = SNAKE_TAIL_DOWN
+snakeSprite TAIL_LEFT = SNAKE_TAIL_LEFT
 
 renderSpriteAt :: Renderer -> Texture -> Sprite -> (Int, Int) -> IO ()
 renderSpriteAt renderer texture sprite (x, y) = do

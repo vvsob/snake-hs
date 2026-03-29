@@ -17,20 +17,20 @@ main = do
     
     texture <- IMG.loadTexture renderer "assets/spritesheet.png"
 
-    appLoop renderer texture
+    appLoop renderer texture (initialState (20, 20) (2, 2))
 
     destroyTexture texture
     destroyRenderer renderer
     destroyWindow window
 
 targetFps :: Word32
-targetFps = 60
+targetFps = 2
 
 targetFrameMs :: Word32
 targetFrameMs = 1000 `div` targetFps
 
-appLoop :: Renderer -> Texture -> IO ()
-appLoop renderer texture = do
+appLoop :: Renderer -> Texture -> Game -> IO ()
+appLoop renderer texture game = do
     frameStart <- getTicks
     events <- pollEvents
     let eventIsExitPress event = case eventPayload event of
@@ -40,9 +40,29 @@ appLoop renderer texture = do
           WindowClosedEvent _ -> True
           _ -> False
         exitPressed = any eventIsExitPress events
-    renderFrame renderer texture
+    let eventDirectionPressed event = case eventPayload event of
+          KeyboardEvent keyboardEvent -> 
+            if keyboardEventKeyMotion keyboardEvent == Pressed 
+                then getInputByKeycode $ keysymKeycode (keyboardEventKeysym keyboardEvent) 
+                else NothingPressed
+          _ -> NothingPressed
+        input = foldMap eventDirectionPressed events
     frameEnd <- getTicks
     let elapsed = frameEnd - frameStart
-    delay (targetFrameMs - elapsed)
-    unless exitPressed (appLoop renderer texture)
+    let updatedGame = execTick game input
+    renderFrame renderer texture updatedGame
+    
+    unless exitPressed $ do 
+        delay (targetFrameMs - elapsed)
+        appLoop renderer texture updatedGame
 
+getInputByKeycode :: Keycode -> MovementInput
+getInputByKeycode KeycodeW = UpPressed
+getInputByKeycode KeycodeUp = UpPressed
+getInputByKeycode KeycodeD = RightPressed
+getInputByKeycode KeycodeRight = RightPressed
+getInputByKeycode KeycodeS = DownPressed
+getInputByKeycode KeycodeDown = DownPressed
+getInputByKeycode KeycodeA = LeftPressed
+getInputByKeycode KeycodeLeft = LeftPressed
+getInputByKeycode _ = NothingPressed
