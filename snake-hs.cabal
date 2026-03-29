@@ -70,6 +70,7 @@ library
     build-depends:
         base ^>=4.20.2.0,
         mtl,
+        random,
         array
 
     -- Directories containing source files.
@@ -132,4 +133,7 @@ test-suite snake-hs-test
     -- Test dependencies.
     build-depends:
         base ^>=4.20.2.0,
-        snake-hs
+        array,
+        snake-hs,
+        tasty,
+        tasty-hunit

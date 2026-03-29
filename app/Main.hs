@@ -24,7 +24,7 @@ main = do
     destroyWindow window
 
 targetFps :: Word32
-targetFps = 2
+targetFps = 5
 
 targetFrameMs :: Word32
 targetFrameMs = 1000 `div` targetFps

@@ -10,14 +10,18 @@ module SnakeLib (
 
     runTick,
 
-    SnakeSegmentOrientation (..)
+    SnakeSegmentOrientation (..),
+    Direction (..),
+    growHead,
+    shrinkTail
 ) where
 
 import Data.Array
 import Control.Monad.State
-import Control.Monad (when)
+import Control.Monad (when, unless)
+import System.Random (randomRIO)
 
-data Tile = SnakeSegment SnakeSegmentOrientation | Apple | Empty
+data Tile = SnakeSegment SnakeSegmentOrientation | Apple | Empty deriving (Eq, Show)
 
 type Pos = (Int, Int)
 
@@ -30,7 +34,7 @@ emptyBoard (w, h) = array ((0, 0), (w-1, h-1)) [((i, j), Empty) | i <- [0..w-1],
 
 initialState :: (Int, Int) -> (Int, Int) -> Game
 initialState size (x, y) = Game 
-    { gameBoard=(emptyBoard size) // [((x-1, y), SnakeSegment TAIL_RIGHT), ((x, y), SnakeSegment HEAD_RIGHT)]
+    { gameBoard=(emptyBoard size) // [((x-1, y), SnakeSegment TAIL_RIGHT), ((x, y), SnakeSegment HEAD_RIGHT), ((x + 2, y), Apple), ((x + 3, y), Apple)]
     , gameBoardSize=size
     , snakeHead=(x, y)
     , snakeTail=(x-1, y)}
@@ -42,6 +46,7 @@ gameTick :: (MonadState Game m, MonadIO m) => MovementInput -> m MovementResult
 gameTick input = do
     movementResult <- advanceSnake input
     when (movementResult == IntoEmpty) shrinkSnake
+    when (movementResult == IntoApple) spawnApple
     pure movementResult
 
 advanceSnake :: MonadState Game m => MovementInput -> m MovementResult
@@ -82,23 +87,23 @@ moveHead direction = do
     let orientation = case headTile of 
             SnakeSegment x -> x
             _ -> error "Invalid snake head tile"
-    let modifiedBoard = board // [(pos, SnakeSegment $ getGrownHead orientation direction), (destination, SnakeSegment $ getNewHead direction)]
+    let modifiedBoard = board // [(pos, SnakeSegment $ growHead orientation direction), (destination, SnakeSegment $ getNewHead direction)]
     modify (\s -> s {gameBoard=modifiedBoard, snakeHead=destination})
 
-getGrownHead :: SnakeSegmentOrientation -> Direction -> SnakeSegmentOrientation
-getGrownHead HEAD_UP UP = VERTICAL
-getGrownHead HEAD_UP LEFT = TURN_DOWN_LEFT
-getGrownHead HEAD_UP RIGHT = TURN_DOWN_RIGHT
-getGrownHead HEAD_RIGHT RIGHT = HORIZONTAL
-getGrownHead HEAD_RIGHT UP = TURN_UP_LEFT
-getGrownHead HEAD_RIGHT DOWN = TURN_DOWN_LEFT
-getGrownHead HEAD_DOWN DOWN = VERTICAL
-getGrownHead HEAD_DOWN RIGHT = TURN_UP_RIGHT
-getGrownHead HEAD_DOWN LEFT = TURN_UP_LEFT
-getGrownHead HEAD_LEFT LEFT = HORIZONTAL
-getGrownHead HEAD_LEFT DOWN = TURN_DOWN_RIGHT
-getGrownHead HEAD_LEFT UP = TURN_UP_RIGHT
-getGrownHead _ _ = error "Invalid getGrownHead arguments"
+growHead :: SnakeSegmentOrientation -> Direction -> SnakeSegmentOrientation
+growHead HEAD_UP UP = VERTICAL
+growHead HEAD_UP LEFT = TURN_DOWN_LEFT
+growHead HEAD_UP RIGHT = TURN_DOWN_RIGHT
+growHead HEAD_RIGHT RIGHT = HORIZONTAL
+growHead HEAD_RIGHT UP = TURN_UP_LEFT
+growHead HEAD_RIGHT DOWN = TURN_DOWN_LEFT
+growHead HEAD_DOWN DOWN = VERTICAL
+growHead HEAD_DOWN RIGHT = TURN_UP_RIGHT
+growHead HEAD_DOWN LEFT = TURN_UP_LEFT
+growHead HEAD_LEFT LEFT = HORIZONTAL
+growHead HEAD_LEFT DOWN = TURN_DOWN_RIGHT
+growHead HEAD_LEFT UP = TURN_UP_RIGHT
+growHead _ _ = error "Invalid growHead arguments"
 
 getNewHead :: Direction -> SnakeSegmentOrientation
 getNewHead UP = HEAD_UP
@@ -122,27 +127,36 @@ shrinkSnake = do
     let orientation = case destinationTile of 
             SnakeSegment x -> x
             _ -> error "Invalid snake segment tile"
-    let modifiedBoard = board // [(pos, Empty), (destination, SnakeSegment $ getNewTail orientation direction)]
+    let modifiedBoard = board // [(pos, Empty), (destination, SnakeSegment $ shrinkTail orientation direction)]
     modify (\s -> s {gameBoard=modifiedBoard, snakeTail=destination})
 
-getNewTail :: SnakeSegmentOrientation -> Direction -> SnakeSegmentOrientation
-getNewTail HEAD_UP UP = TAIL_UP
-getNewTail HEAD_RIGHT RIGHT = TAIL_RIGHT
-getNewTail HEAD_DOWN DOWN = TAIL_DOWN
-getNewTail HEAD_LEFT LEFT = TAIL_LEFT
-getNewTail TURN_UP_RIGHT LEFT = TAIL_UP
-getNewTail TURN_UP_RIGHT DOWN = TAIL_RIGHT
-getNewTail TURN_DOWN_RIGHT LEFT = TAIL_DOWN
-getNewTail TURN_DOWN_RIGHT UP = TAIL_RIGHT
-getNewTail TURN_DOWN_LEFT RIGHT = TAIL_DOWN
-getNewTail TURN_DOWN_LEFT UP = TAIL_LEFT
-getNewTail TURN_UP_LEFT RIGHT = TAIL_UP
-getNewTail TURN_UP_LEFT DOWN = TAIL_LEFT
-getNewTail HORIZONTAL RIGHT = TAIL_RIGHT
-getNewTail HORIZONTAL LEFT = TAIL_LEFT
-getNewTail VERTICAL UP = TAIL_UP
-getNewTail VERTICAL DOWN = TAIL_DOWN
-getNewTail o d = error ("Invalid getNewTail arguments: " ++ show o ++ " " ++ show d)
+shrinkTail :: SnakeSegmentOrientation -> Direction -> SnakeSegmentOrientation
+shrinkTail HEAD_UP UP = TAIL_UP
+shrinkTail HEAD_RIGHT RIGHT = TAIL_RIGHT
+shrinkTail HEAD_DOWN DOWN = TAIL_DOWN
+shrinkTail HEAD_LEFT LEFT = TAIL_LEFT
+shrinkTail TURN_UP_RIGHT LEFT = TAIL_UP
+shrinkTail TURN_UP_RIGHT DOWN = TAIL_RIGHT
+shrinkTail TURN_DOWN_RIGHT LEFT = TAIL_DOWN
+shrinkTail TURN_DOWN_RIGHT UP = TAIL_RIGHT
+shrinkTail TURN_DOWN_LEFT RIGHT = TAIL_DOWN
+shrinkTail TURN_DOWN_LEFT UP = TAIL_LEFT
+shrinkTail TURN_UP_LEFT RIGHT = TAIL_UP
+shrinkTail TURN_UP_LEFT DOWN = TAIL_LEFT
+shrinkTail HORIZONTAL RIGHT = TAIL_RIGHT
+shrinkTail HORIZONTAL LEFT = TAIL_LEFT
+shrinkTail VERTICAL UP = TAIL_UP
+shrinkTail VERTICAL DOWN = TAIL_DOWN
+shrinkTail o d = error ("Invalid shrinkTail arguments: " ++ show o ++ " " ++ show d)
+
+spawnApple :: (MonadState Game m, MonadIO m) => m ()
+spawnApple = do
+    (w, h) <- gets gameBoardSize
+    pos <- liftIO $ randomRIO ((0, 0), (w - 1, h - 1))
+    tile <- getTileAt pos
+    case tile of 
+        Empty -> modify (\s -> s {gameBoard = gameBoard s // [(pos, Apple)]})
+        _ -> spawnApple
 
 tileAt :: Board -> Pos -> Tile
 tileAt board (x, y) = (board ! (x, y))
