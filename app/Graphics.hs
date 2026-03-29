@@ -13,6 +13,7 @@ import Snake
 
 import Assets
 import qualified Data.Text as Text
+import Data.Word (Word8)
 
 spriteSize :: CInt
 spriteSize = 16
@@ -22,12 +23,25 @@ tileSize = 64
 
 renderFrame :: Renderer -> Assets -> Game -> IO ()
 renderFrame renderer (texture, font) game = do
-    rendererDrawColor renderer $= V4 32 32 32 255
+    rendererDrawColor renderer $= V4 0 0 0 255
     clear renderer
+    renderBG renderer (gameBoardSize game)
     rendererDrawColor renderer $= V4 255 255 255 255
     renderGame renderer texture game
     renderScore renderer font game
     present renderer
+
+renderBG :: Renderer -> (Int, Int) -> IO ()
+renderBG renderer (w, h) = do
+    void $ traverse (renderBGTile renderer) [(x, y) | x <- [0..w-1], y <- [0..h-1]]
+
+tileColors :: (V4 Word8, V4 Word8)
+tileColors = (V4 32 32 32 255, V4 64 64 64 255)
+
+renderBGTile :: Renderer -> (Int, Int) -> IO ()
+renderBGTile renderer (x, y) = do
+    rendererDrawColor renderer $= ((if even (x + y) then fst else snd) tileColors)
+    fillRect renderer (Just $ Rectangle (P $ V2 (fromIntegral x * tileSize) (fromIntegral y * tileSize)) (V2 tileSize tileSize))
 
 renderGame :: Renderer -> Texture -> Game -> IO ()
 renderGame renderer texture state = do
