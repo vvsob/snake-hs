@@ -24,9 +24,9 @@ renderTile :: Renderer -> Texture -> (Pos, Tile) -> IO ()
 renderTile renderer texture (pos, tile) = case tile of
     Empty -> return ()
     Apple -> renderSpriteAt renderer texture APPLE pos
-    Snake orientation -> renderSpriteAt renderer texture (snakeSprite orientation) pos
+    SnakeSegment orientation -> renderSpriteAt renderer texture (snakeSprite orientation) pos
 
-snakeSprite :: SnakeOrientation -> Sprite
+snakeSprite :: SnakeSegmentOrientation -> Sprite
 snakeSprite HEAD_DOWN = SNAKE_HEAD_DOWN
 snakeSprite HEAD_LEFT = SNAKE_HEAD_LEFT
 snakeSprite HEAD_UP = SNAKE_HEAD_UP

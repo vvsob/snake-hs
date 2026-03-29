@@ -1,69 +1,50 @@
+{-# LANGUAGE FlexibleContexts #-}
 module SnakeLib (
     MovementInput (..),
     Tile (..),
     Pos,
     Board,
-    tileAt,
-    wrapPos,
 
     Game (..),
     initialState,
 
-    execTick,
+    runTick,
 
-    SnakeOrientation (..)
+    SnakeSegmentOrientation (..)
 ) where
 
 import Data.Array
 import Control.Monad.State
 import Control.Monad (when)
 
-data MovementInput = UpPressed | RightPressed | DownPressed | LeftPressed | NothingPressed deriving (Eq, Show)
-
-instance Semigroup MovementInput where
-    (<>) l NothingPressed = l
-    NothingPressed <> r = r
-    l <> _ = l
-
-instance Monoid MovementInput where
-    mempty = NothingPressed
-
-data Tile = Snake SnakeOrientation | Apple | Empty
+data Tile = SnakeSegment SnakeSegmentOrientation | Apple | Empty
 
 type Pos = (Int, Int)
+
 type Board = Array Pos Tile
 
-tileAt :: Board -> Pos -> Tile
-tileAt board (x, y) = (board ! (x, y))
-
-wrapPos :: (Int, Int) -> Pos -> Pos
-wrapPos (w, h) (x, y) =
-  (x `mod` w, y `mod` h)
-
 data Game = Game {gameBoard :: Board, gameBoardSize :: (Int, Int), snakeHead :: Pos, snakeTail :: Pos}
-
-type GameState = State Game
 
 emptyBoard :: (Int, Int) -> Array (Int, Int) Tile
 emptyBoard (w, h) = array ((0, 0), (w-1, h-1)) [((i, j), Empty) | i <- [0..w-1], j <- [0..h-1]]
 
 initialState :: (Int, Int) -> (Int, Int) -> Game
 initialState size (x, y) = Game 
-    { gameBoard=(emptyBoard size) // [((x-1, y), Snake TAIL_RIGHT), ((x, y), Snake HEAD_RIGHT)]
+    { gameBoard=(emptyBoard size) // [((x-1, y), SnakeSegment TAIL_RIGHT), ((x, y), SnakeSegment HEAD_RIGHT)]
     , gameBoardSize=size
     , snakeHead=(x, y)
     , snakeTail=(x-1, y)}
 
-execTick :: Game -> MovementInput -> Game
-execTick game input = execState (gameTick input) game
+runTick :: Game -> MovementInput -> IO (MovementResult, Game)
+runTick game input = runStateT (gameTick input) game
 
-gameTick :: MovementInput -> GameState MovementResult
+gameTick :: (MonadState Game m, MonadIO m) => MovementInput -> m MovementResult
 gameTick input = do
     movementResult <- advanceSnake input
     when (movementResult == IntoEmpty) shrinkSnake
     pure movementResult
 
-advanceSnake :: MovementInput -> GameState MovementResult
+advanceSnake :: MonadState Game m => MovementInput -> m MovementResult
 advanceSnake input = do
     idleDirection <- headDirection
     let inputDirection = case input of 
@@ -79,32 +60,32 @@ advanceSnake input = do
     case destinationTile of
         Apple -> moveHead direction >> pure IntoApple
         Empty -> moveHead direction >> pure IntoEmpty
-        Snake _ -> pure IntoSnake
+        SnakeSegment _ -> pure IntoSnake
 
-headDirection :: GameState Direction
+headDirection :: MonadState Game m => m Direction
 headDirection = gets f
     where 
         f :: Game -> Direction
         f game = case tileAt (gameBoard game) (snakeHead game) of
-            Snake HEAD_DOWN -> DOWN
-            Snake HEAD_LEFT -> LEFT
-            Snake HEAD_UP -> UP
-            Snake HEAD_RIGHT -> RIGHT
+            SnakeSegment HEAD_DOWN -> DOWN
+            SnakeSegment HEAD_LEFT -> LEFT
+            SnakeSegment HEAD_UP -> UP
+            SnakeSegment HEAD_RIGHT -> RIGHT
             _ -> error "Invalid snake head tile"
 
-moveHead :: Direction -> GameState ()
+moveHead :: MonadState Game m => Direction -> m ()
 moveHead direction = do 
     pos <- gets snakeHead
     destination <- shiftPos pos direction
     board <- gets gameBoard
-    headTile <- gets ((`tileAt` pos) . gameBoard)
+    headTile <- getTileAt pos
     let orientation = case headTile of 
-            Snake x -> x
+            SnakeSegment x -> x
             _ -> error "Invalid snake head tile"
-    let modifiedBoard = board // [(pos, Snake $ getGrownHead orientation direction), (destination, Snake $ getNewHead direction)]
+    let modifiedBoard = board // [(pos, SnakeSegment $ getGrownHead orientation direction), (destination, SnakeSegment $ getNewHead direction)]
     modify (\s -> s {gameBoard=modifiedBoard, snakeHead=destination})
 
-getGrownHead :: SnakeOrientation -> Direction -> SnakeOrientation
+getGrownHead :: SnakeSegmentOrientation -> Direction -> SnakeSegmentOrientation
 getGrownHead HEAD_UP UP = VERTICAL
 getGrownHead HEAD_UP LEFT = TURN_DOWN_LEFT
 getGrownHead HEAD_UP RIGHT = TURN_DOWN_RIGHT
@@ -119,39 +100,32 @@ getGrownHead HEAD_LEFT DOWN = TURN_DOWN_RIGHT
 getGrownHead HEAD_LEFT UP = TURN_UP_RIGHT
 getGrownHead _ _ = error "Invalid getGrownHead arguments"
 
-getNewHead :: Direction -> SnakeOrientation
+getNewHead :: Direction -> SnakeSegmentOrientation
 getNewHead UP = HEAD_UP
 getNewHead RIGHT = HEAD_RIGHT
 getNewHead DOWN = HEAD_DOWN
 getNewHead LEFT = HEAD_LEFT
 
-shiftPos :: Pos -> Direction -> GameState Pos
-shiftPos (x, y) direction = do
-    let (dx, dy) = getDelta direction
-    size <- gets gameBoardSize
-    pure $ wrapPos size (x + dx, y + dy)
-    
-
-shrinkSnake :: GameState ()
+shrinkSnake :: MonadState Game m => m ()
 shrinkSnake = do
     pos <- gets snakeTail
-    tile <- gets ((`tileAt` pos) . gameBoard)
+    tile <- getTileAt pos
     let direction = case tile of
-            Snake TAIL_UP -> UP
-            Snake TAIL_RIGHT -> RIGHT
-            Snake TAIL_DOWN -> DOWN
-            Snake TAIL_LEFT -> LEFT
+            SnakeSegment TAIL_UP -> UP
+            SnakeSegment TAIL_RIGHT -> RIGHT
+            SnakeSegment TAIL_DOWN -> DOWN
+            SnakeSegment TAIL_LEFT -> LEFT
             _ -> error "Invalid snake tail tile"
     destination <- shiftPos pos direction
     board <- gets gameBoard
-    destinationTile <- gets ((`tileAt` destination) . gameBoard)
+    destinationTile <- getTileAt destination
     let orientation = case destinationTile of 
-            Snake x -> x
+            SnakeSegment x -> x
             _ -> error "Invalid snake segment tile"
-    let modifiedBoard = board // [(pos, Empty), (destination, Snake $ getNewTail orientation direction)]
+    let modifiedBoard = board // [(pos, Empty), (destination, SnakeSegment $ getNewTail orientation direction)]
     modify (\s -> s {gameBoard=modifiedBoard, snakeTail=destination})
 
-getNewTail :: SnakeOrientation -> Direction -> SnakeOrientation
+getNewTail :: SnakeSegmentOrientation -> Direction -> SnakeSegmentOrientation
 getNewTail HEAD_UP UP = TAIL_UP
 getNewTail HEAD_RIGHT RIGHT = TAIL_RIGHT
 getNewTail HEAD_DOWN DOWN = TAIL_DOWN
@@ -170,9 +144,35 @@ getNewTail VERTICAL UP = TAIL_UP
 getNewTail VERTICAL DOWN = TAIL_DOWN
 getNewTail o d = error ("Invalid getNewTail arguments: " ++ show o ++ " " ++ show d)
 
+tileAt :: Board -> Pos -> Tile
+tileAt board (x, y) = (board ! (x, y))
+
+wrapPos :: (Int, Int) -> Pos -> Pos
+wrapPos (w, h) (x, y) =
+  (x `mod` w, y `mod` h)
+
+getTileAt :: MonadState Game m => Pos -> m Tile
+getTileAt pos = gets ((`tileAt` pos) . gameBoard)
+
+shiftPos :: MonadState Game m => Pos -> Direction -> m Pos
+shiftPos (x, y) direction = do
+    let (dx, dy) = getDelta direction
+    size <- gets gameBoardSize
+    pure $ wrapPos size (x + dx, y + dy)
+
+data MovementInput = UpPressed | RightPressed | DownPressed | LeftPressed | NothingPressed deriving (Eq, Show)
+
+instance Semigroup MovementInput where
+    (<>) l NothingPressed = l
+    NothingPressed <> r = r
+    l <> _ = l
+
+instance Monoid MovementInput where
+    mempty = NothingPressed
+
 data MovementResult = IntoApple | IntoSnake | IntoEmpty deriving (Eq, Show)
 
-data SnakeOrientation =
+data SnakeSegmentOrientation =
     HEAD_DOWN | HEAD_LEFT | HEAD_UP | HEAD_RIGHT |
     TURN_UP_RIGHT | TURN_DOWN_RIGHT | TURN_DOWN_LEFT | TURN_UP_LEFT |
     VERTICAL | HORIZONTAL |

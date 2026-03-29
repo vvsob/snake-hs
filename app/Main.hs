@@ -17,7 +17,7 @@ main = do
     
     texture <- IMG.loadTexture renderer "assets/spritesheet.png"
 
-    appLoop renderer texture (initialState (20, 20) (2, 2))
+    appLoop renderer texture (initialState (10, 10) (2, 2))
 
     destroyTexture texture
     destroyRenderer renderer
@@ -49,7 +49,7 @@ appLoop renderer texture game = do
         input = foldMap eventDirectionPressed events
     frameEnd <- getTicks
     let elapsed = frameEnd - frameStart
-    let updatedGame = execTick game input
+    (_, updatedGame) <- runTick game input
     renderFrame renderer texture updatedGame
     
     unless exitPressed $ do 
