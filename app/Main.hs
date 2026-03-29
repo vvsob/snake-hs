@@ -21,7 +21,7 @@ main = do
     renderer <- createRenderer window (-1) defaultRenderer
     
     assets <- loadAssets renderer
-    appLoop renderer assets (initialState boardSize (2, 2))
+    appLoop renderer assets (startState, False)
     freeAssets assets
     destroyRenderer renderer
     destroyWindow window
@@ -35,14 +35,17 @@ targetFrameMs = 1000 `div` targetFps
 boardSize :: (Int, Int)
 boardSize = (12, 8)
 
+startState :: Game
+startState = initialState boardSize (2, 2)
+
 boardWindowSize :: (Int, Int) -> V2 CInt
 boardWindowSize (w, h) = V2 (fromIntegral w * tileSize) (fromIntegral h * tileSize)
 
 snakeWindowSize :: V2 CInt
 snakeWindowSize = boardWindowSize boardSize
 
-appLoop :: Renderer -> Assets -> Game -> IO ()
-appLoop renderer assets game = do
+appLoop :: Renderer -> Assets -> (Game, Bool) -> IO ()
+appLoop renderer assets (game, isEnd) = do
     frameStart <- getTicks
     events <- pollEvents
     let eventIsExitPress event = case eventPayload event of
@@ -57,7 +60,7 @@ appLoop renderer assets game = do
                 keyboardEventKeyMotion keyboardEvent == Pressed &&
                 keysymKeycode (keyboardEventKeysym keyboardEvent) == KeycodeR
             _ -> False
-        restartPresssed = any eventIsRestartPress events
+        restartPressed = any eventIsRestartPress events
     let eventDirectionPress event = case eventPayload event of
           KeyboardEvent keyboardEvent -> 
             if keyboardEventKeyMotion keyboardEvent == Pressed 
@@ -65,14 +68,15 @@ appLoop renderer assets game = do
                 else NothingPressed
           _ -> NothingPressed
         input = foldMap eventDirectionPress events
-    (_, updatedGame) <- if restartPresssed then pure (IntoEmpty, initialState (10, 8) (2, 2)) else runTick game input
-    renderFrame renderer assets updatedGame
+    (movementResult, updatedGame) <- if restartPressed then pure (IntoEmpty, startState) else if isEnd then pure (IntoEmpty, game) else runTick game input
+    let updatedIsEnd = (isEnd || movementResult == IntoSnake) && not restartPressed
+    renderFrame renderer assets (updatedGame, updatedIsEnd)
     
     unless exitPressed $ do 
         frameEnd <- getTicks
         let elapsed = frameEnd - frameStart
         delay (targetFrameMs - elapsed)
-        appLoop renderer assets updatedGame
+        appLoop renderer assets (updatedGame, updatedIsEnd)
 
 getInputByKeycode :: Keycode -> MovementInput
 getInputByKeycode KeycodeW = UpPressed

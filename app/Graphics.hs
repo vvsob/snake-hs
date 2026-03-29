@@ -7,7 +7,7 @@ import SDL
 import qualified SDL.Font as FONT
 import Foreign.C (CInt)
 import Data.Array (assocs)
-import Control.Monad (void)
+import Control.Monad (void, when)
 
 import Snake
 
@@ -21,14 +21,15 @@ spriteSize = 16
 tileSize :: CInt
 tileSize = 64
 
-renderFrame :: Renderer -> Assets -> Game -> IO ()
-renderFrame renderer (texture, font) game = do
+renderFrame :: Renderer -> Assets -> (Game, Bool) -> IO ()
+renderFrame renderer (texture, font) (game, isEnd) = do
     rendererDrawColor renderer $= V4 0 0 0 255
     clear renderer
     renderBG renderer (gameBoardSize game)
     rendererDrawColor renderer $= V4 255 255 255 255
     renderGame renderer texture game
     renderScore renderer font game
+    when isEnd $ renderDefeat renderer font
     present renderer
 
 renderBG :: Renderer -> (Int, Int) -> IO ()
@@ -63,6 +64,18 @@ renderScore renderer font game = do
     width <- textureWidth <$> queryTexture texture
     height <- textureHeight <$> queryTexture texture
     copy renderer texture Nothing (Just (Rectangle (P (V2 20 20)) (V2 width height)))
+
+    destroyTexture texture
+
+renderDefeat :: Renderer -> FONT.Font -> IO ()
+renderDefeat renderer font = do
+    surface <- FONT.blended font (V4 200 50 50 255) $ Text.pack ("You died! Press R to restart.")
+    texture <- createTextureFromSurface renderer surface
+    freeSurface surface
+
+    width <- textureWidth <$> queryTexture texture
+    height <- textureHeight <$> queryTexture texture
+    copy renderer texture Nothing (Just (Rectangle (P (V2 20 60)) (V2 width height)))
 
     destroyTexture texture
 
